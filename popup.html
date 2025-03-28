@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Wistia Engagement Analyzer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Wistia Engagement Analyzer</h1>
+    
+    <div class="input-section">
+      <label for="apiKey">Wistia API Key:</label>
+      <input type="password" id="apiKey" placeholder="Enter your Wistia API key">
+      
+      <label for="urlInput">Wistia Media ID:</label>
+      <input type="text" id="urlInput" placeholder="Enter Wistia media ID (e.g., abc123)">
+      
+      <button id="analyzeBtn">Analyze Engagement</button>
+    </div>
+
+    <div class="results-section" id="resultsSection">
+      <div id="loading" class="hidden">Analyzing...</div>
+      <div id="error" class="hidden"></div>
+      <div id="results" class="hidden">
+        <h2>Analysis Results</h2>
+        <div id="videoDetails"></div>
+        <div id="engagementMetrics"></div>
+        <div id="benchmarkComparison"></div>
+      </div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html> 

@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Wistia Engagement Analyzer",
+  "version": "1.0",
+  "description": "Analyze Wistia video engagement metrics against benchmarks",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.wistia.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+} 
