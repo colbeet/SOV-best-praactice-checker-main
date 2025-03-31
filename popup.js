@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const duration = videoData.duration;
     const lengthCategory = getLengthCategory(duration);
     const engagement = stats.engagement || 0;
-    const playRate = (stats.play_count / stats.visitor_count) || 0;
+    const playRate = (stats.play_rate) || 0;
     
     // Get selected video and page types
     const videoType = document.getElementById('videoType').value;
@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', function() {
       <p>Engagement Rate: ${(engagement * 100).toFixed(1)}%</p>
       <p>Play Rate: ${(playRate * 100).toFixed(1)}%</p>
       <p>Total Views: ${stats.play_count}</p>
-      <p>Unique Visitors: ${stats.visitor_count}</p>
+      <p>Unique Visitors: ${stats.visitors}</p>
     `;
 
     // Display benchmark comparisons
