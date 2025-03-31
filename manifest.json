@@ -5,10 +5,12 @@
   "description": "Analyze Wistia video engagement metrics against benchmarks",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
-    "https://api.wistia.com/*"
+    "https://*.wistia.com/*",
+    "https://*.wistia.net/*"
   ],
   "action": {
     "default_popup": "popup.html"

@@ -25,19 +25,25 @@ h1 {
 label {
   font-weight: 500;
   color: #555;
+  margin-top: 10px;
 }
 
-input {
+input, select {
   padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 14px;
+  background-color: white;
 }
 
-input:focus {
+input:focus, select:focus {
   outline: none;
   border-color: #2ecc71;
   box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.1);
+}
+
+select {
+  cursor: pointer;
 }
 
 button {
@@ -49,6 +55,7 @@ button {
   cursor: pointer;
   font-weight: 500;
   transition: background-color 0.2s;
+  margin-top: 10px;
 }
 
 button:hover {
@@ -57,6 +64,8 @@ button:hover {
 
 .results-section {
   margin-top: 20px;
+  border-top: 1px solid #eee;
+  padding-top: 20px;
 }
 
 .hidden {
@@ -87,10 +96,71 @@ button:hover {
   color: #333;
 }
 
+#results h3 {
+  font-size: 14px;
+  margin: 15px 0 10px 0;
+  color: #444;
+}
+
+#results h4 {
+  font-size: 13px;
+  margin: 12px 0 8px 0;
+  color: #555;
+}
+
 #videoDetails, #engagementMetrics, #benchmarkComparison {
   margin-bottom: 15px;
   padding: 10px;
   background-color: white;
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+#benchmarkComparison ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#benchmarkComparison li {
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+  font-size: 13px;
+}
+
+#benchmarkComparison li:last-child {
+  border-bottom: none;
+}
+
+.benchmark-section {
+  margin: 15px 0;
+  padding: 12px;
+  background-color: white;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.benchmark-section h4 {
+  margin: 0 0 10px 0;
+  color: #444;
+  font-size: 14px;
+}
+
+.benchmark-section p {
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Performance Colors */
+.performance-good {
+  color: #2ecc71;
+}
+
+.performance-warning {
+  color: #f1c40f;
+}
+
+.performance-poor {
+  color: #e74c3c;
 } 

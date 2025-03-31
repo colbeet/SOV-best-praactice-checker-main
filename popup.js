@@ -9,17 +9,85 @@ document.addEventListener('DOMContentLoaded', function() {
   const engagementMetricsDiv = document.getElementById('engagementMetrics');
   const benchmarkComparisonDiv = document.getElementById('benchmarkComparison');
 
-  // Load saved API key and media ID if they exist
-  chrome.storage.sync.get(['wistiaApiKey', 'wistiaMediaId'], function(result) {
+  // Benchmark data from State of Video 2023
+  const BENCHMARKS = {
+    videoTypes: {
+      'original-series': { conversion: 0.30, name: 'Original Series' },
+      'webinar': { conversion: 0.25, name: 'Webinar' },
+      'sales': { conversion: 0.20, name: 'Sales' },
+      'customer-testimonial': { conversion: 0.17, name: 'Customer Testimonial' },
+      'product': { conversion: 0.17, name: 'Product' },
+      'educational': { conversion: 0.16, name: 'Educational' },
+      'promotional': { conversion: 0.12, name: 'Promotional' },
+      'company-culture': { conversion: 0.08, name: 'Company Culture' },
+      'social-media': { conversion: 0.04, name: 'Social Media' }
+    },
+    pageTypes: {
+      'blog': { videoPresence: 0.16, playRate: 0.11, engagementRate: 0.44, avgLength: 5 },
+      'case-study': { videoPresence: 0.05, playRate: 0.08, engagementRate: 0.47, avgLength: 4 },
+      'course': { videoPresence: 0.02, playRate: 0.35, engagementRate: 0.50, avgLength: 21 },
+      'contact': { videoPresence: 0.03, playRate: 0.32, engagementRate: 0.51, avgLength: 2 },
+      'event': { videoPresence: 0.04, playRate: 0.17, engagementRate: 0.33, avgLength: 26 },
+      'home': { videoPresence: 0.36, playRate: 0.17, engagementRate: 0.50, avgLength: 6 },
+      'landing': { videoPresence: 0.03, playRate: 0.13, engagementRate: 0.42, avgLength: 6 },
+      'video-gallery': { videoPresence: 0.11, playRate: 0.33, engagementRate: 0.45, avgLength: 15 },
+      'product': { videoPresence: 0.20, playRate: 0.12, engagementRate: 0.57, avgLength: 3 },
+      'thank-you': { videoPresence: 0.02, playRate: 0.16, engagementRate: 0.55, avgLength: 10 }
+    },
+    lengthBenchmarks: {
+      'under-1': { maxSeconds: 60, conversion: 0.02 },
+      '1-3': { maxSeconds: 180, conversion: 0.02 },
+      '3-5': { maxSeconds: 300, conversion: 0.05 },
+      '5-30': { maxSeconds: 1800, conversion: 0.10 },
+      '30-60': { maxSeconds: 3600, conversion: 0.17 }
+    }
+  };
+
+  // Load saved values and check current tab
+  chrome.storage.sync.get(['wistiaApiKey', 'wistiaMediaId', 'videoType', 'pageType'], function(result) {
     if (result.wistiaApiKey) {
       apiKeyInput.value = result.wistiaApiKey;
     }
     if (result.wistiaMediaId) {
       mediaIdInput.value = result.wistiaMediaId;
     }
+    
+    // Check current tab for Wistia URL
+    checkCurrentTab();
   });
 
-  // Save API key and media ID as they're typed
+  // Function to extract media ID from Wistia URL
+  function extractMediaId(url) {
+    const mediaPattern = /(?:wistia\.com\/medias|wistia\.net\/embed)\/([a-zA-Z0-9]+)/;
+    const match = url.match(mediaPattern);
+    return match ? match[1] : null;
+  }
+
+  // Function to check current tab for Wistia URL
+  function checkCurrentTab() {
+    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+      if (tabs[0] && tabs[0].url) {
+        const mediaId = extractMediaId(tabs[0].url);
+        if (mediaId) {
+          mediaIdInput.value = mediaId;
+          chrome.storage.sync.set({ wistiaMediaId: mediaId });
+        }
+      }
+    });
+  }
+
+  // Listen for tab updates
+  chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
+    if (changeInfo.url) {
+      const mediaId = extractMediaId(changeInfo.url);
+      if (mediaId) {
+        mediaIdInput.value = mediaId;
+        chrome.storage.sync.set({ wistiaMediaId: mediaId });
+      }
+    }
+  });
+
+  // Event listeners for input fields
   apiKeyInput.addEventListener('input', function() {
     chrome.storage.sync.set({ wistiaApiKey: apiKeyInput.value });
   });
@@ -76,64 +144,113 @@ document.addEventListener('DOMContentLoaded', function() {
     return await response.json();
   }
 
+  function getLengthCategory(duration) {
+    for (const [category, data] of Object.entries(BENCHMARKS.lengthBenchmarks)) {
+      if (duration <= data.maxSeconds) {
+        return { category, data };
+      }
+    }
+    return { category: '30-60', data: BENCHMARKS.lengthBenchmarks['30-60'] };
+  }
+
   function displayResults(videoData, stats) {
     const duration = videoData.duration;
-    const benchmark = getBenchmark(duration);
+    const lengthCategory = getLengthCategory(duration);
+    const engagement = stats.engagement || 0;
+    const playRate = (stats.play_count / stats.visitor_count) || 0;
     
+    // Get selected video and page types
+    const videoType = document.getElementById('videoType').value;
+    const pageType = document.getElementById('pageType').value;
+
     // Display video details
     videoDetailsDiv.innerHTML = `
       <h3>Video Details</h3>
       <p>Title: ${videoData.name}</p>
       <p>Duration: ${formatDuration(duration)}</p>
+      <p>Length Category: ${lengthCategory.category} minutes</p>
     `;
 
-    // Calculate engagement metrics
-    const engagement = calculateEngagement(stats);
-    
     // Display engagement metrics
     engagementMetricsDiv.innerHTML = `
-      <h3>Engagement Metrics</h3>
-      <p>Average Engagement: ${(engagement * 100).toFixed(1)}%</p>
-      <p>Total Views: ${stats.total_plays}</p>
+      <h3>Performance Metrics</h3>
+      <p>Engagement Rate: ${(engagement * 100).toFixed(1)}%</p>
+      <p>Play Rate: ${(playRate * 100).toFixed(1)}%</p>
+      <p>Total Views: ${stats.play_count}</p>
+      <p>Unique Visitors: ${stats.visitor_count}</p>
     `;
 
-    // Display benchmark comparison
-    const comparison = compareToBenchmark(engagement, benchmark);
-    benchmarkComparisonDiv.innerHTML = `
-      <h3>Benchmark Comparison</h3>
-      <p>Industry Benchmark: ${(benchmark * 100).toFixed(1)}%</p>
-      <p>${comparison}</p>
+    // Display benchmark comparisons
+    let benchmarkHtml = '<h3>Benchmark Comparisons</h3>';
+
+    // Add length-based metrics
+    const lengthConversion = lengthCategory.data.conversion;
+    const lengthDiff = engagement - lengthConversion;
+    const lengthColor = getPerformanceColor(lengthDiff);
+    
+    benchmarkHtml += `
+      <div class="benchmark-section">
+        <h4>Length-Based Metrics</h4>
+        <p style="color: ${lengthColor}">
+          Expected Conversion Rate: ${(lengthConversion * 100).toFixed(1)}%
+          (You: ${(engagement * 100).toFixed(1)}% - 
+          ${getPerformanceText(lengthDiff)})
+        </p>
+      </div>
     `;
 
+    // Add video type specific benchmark if selected
+    if (videoType) {
+      const videoTypeData = BENCHMARKS.videoTypes[videoType];
+      const videoTypeDiff = engagement - videoTypeData.conversion;
+      const videoTypeColor = getPerformanceColor(videoTypeDiff);
+      
+      benchmarkHtml += `
+        <div class="benchmark-section">
+          <h4>${videoTypeData.name} Video Benchmark</h4>
+          <p style="color: ${videoTypeColor}">
+            Expected Conversion Rate: ${(videoTypeData.conversion * 100).toFixed(1)}%
+            (You: ${(engagement * 100).toFixed(1)}% - 
+            ${getPerformanceText(videoTypeDiff)})
+          </p>
+        </div>
+      `;
+    }
+
+    // Add page type specific benchmark if selected
+    if (pageType) {
+      const pageTypeData = BENCHMARKS.pageTypes[pageType];
+      const pageTypeDiff = engagement - pageTypeData.engagementRate;
+      const pageTypeColor = getPerformanceColor(pageTypeDiff);
+      
+      benchmarkHtml += `
+        <div class="benchmark-section">
+          <h4>${pageType.replace('-', ' ').toUpperCase()} Page Benchmark</h4>
+          <p style="color: ${pageTypeColor}">
+            Expected Engagement: ${(pageTypeData.engagementRate * 100).toFixed(1)}%
+            (You: ${(engagement * 100).toFixed(1)}% - 
+            ${getPerformanceText(pageTypeDiff)})
+          </p>
+          <p>Typical Play Rate: ${(pageTypeData.playRate * 100).toFixed(1)}%</p>
+          <p>Average Video Length: ${pageTypeData.avgLength} minutes</p>
+        </div>
+      `;
+    }
+
+    benchmarkComparisonDiv.innerHTML = benchmarkHtml;
     showResults();
   }
 
-  function getBenchmark(duration) {
-    // Wistia's engagement benchmarks by video length
-    if (duration <= 60) return 0.50; // 50% for videos under 60 seconds
-    if (duration <= 180) return 0.46; // 47% for videos 1-3 minutes
-    if (duration <= 300) return 0.45; // 45% for videos 3-5 minutes
-    if (duration <= 1800) return 0.38; // 38% for videos 5-30 minutes
-    if (duration <= 3600) return 0.25; // 25% for videos 30-60 minutes
-    return 0.17; // 17% for videos over 60 minutes
+  function getPerformanceColor(difference) {
+    if (difference >= 0) return '#2ecc71'; // Green for at or above benchmark
+    if (difference >= -0.1) return '#f1c40f'; // Yellow for within 10% below
+    return '#e74c3c'; // Red for more than 10% below
   }
 
-  function calculateEngagement(stats) {
-    // Use the engagement metric directly from the API response
-    return stats.engagement || 0;
-  }
-
-  function compareToBenchmark(engagement, benchmark) {
-    const difference = engagement - benchmark;
-    const percentage = Math.abs(difference * 100).toFixed(1);
-
-    if (difference > 0) {
-      return `Your video is performing ${percentage}% above the industry benchmark!`;
-    } else if (difference < 0) {
-      return `Your video is performing ${percentage}% below the industry benchmark.`;
-    } else {
-      return 'Your video is performing exactly at the industry benchmark.';
-    }
+  function getPerformanceText(difference) {
+    if (difference >= 0) return 'At or Above Benchmark';
+    if (difference >= -0.1) return 'Slightly Below Benchmark';
+    return 'Significantly Below Benchmark';
   }
 
   function formatDuration(seconds) {
