@@ -187,15 +187,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const lengthConversion = lengthCategory.data.conversion;
     const lengthDiff = engagement - lengthConversion;
     const lengthColor = getPerformanceColor(lengthDiff);
+    const lengthPerformanceClass = getPerformanceClass(lengthDiff);
     
     benchmarkHtml += `
-      <div class="benchmark-section">
+      <div class="benchmark-section ${lengthPerformanceClass}">
         <h4>Length-Based Metrics</h4>
-        <p style="color: ${lengthColor}">
-          Expected Conversion Rate: ${(lengthConversion * 100).toFixed(1)}%
-          (You: ${(engagement * 100).toFixed(1)}% - 
-          ${getPerformanceText(lengthDiff)})
-        </p>
+        <div class="metric-label"> Conversion Rate:</div>
+        <div class="metric-value">
+          ${(engagement * 100).toFixed(1)}% - 
+          ${getPerformanceText(lengthDiff)}<br>
+          (Benchmark: ${(lengthConversion * 100).toFixed(1)}%)
+        </div>
       </div>
     `;
 
@@ -204,15 +206,17 @@ document.addEventListener('DOMContentLoaded', function() {
       const videoTypeData = BENCHMARKS.videoTypes[videoType];
       const videoTypeDiff = engagement - videoTypeData.conversion;
       const videoTypeColor = getPerformanceColor(videoTypeDiff);
+      const videoTypePerformanceClass = getPerformanceClass(videoTypeDiff);
       
       benchmarkHtml += `
-        <div class="benchmark-section">
+        <div class="benchmark-section ${videoTypePerformanceClass}">
           <h4>${videoTypeData.name} Video Benchmark</h4>
-          <p style="color: ${videoTypeColor}">
-            Expected Conversion Rate: ${(videoTypeData.conversion * 100).toFixed(1)}%
-            (You: ${(engagement * 100).toFixed(1)}% - 
-            ${getPerformanceText(videoTypeDiff)})
-          </p>
+          <div class="metric-label">Conversion Rate:</div>
+          <div class="metric-value">
+             ${(engagement * 100).toFixed(1)}% - 
+            ${getPerformanceText(videoTypeDiff)}<br>
+            (Benchmark: ${(videoTypeData.conversion * 100).toFixed(1)}%)
+          </div>
         </div>
       `;
     }
@@ -222,17 +226,26 @@ document.addEventListener('DOMContentLoaded', function() {
       const pageTypeData = BENCHMARKS.pageTypes[pageType];
       const pageTypeDiff = engagement - pageTypeData.engagementRate;
       const pageTypeColor = getPerformanceColor(pageTypeDiff);
+      const pageTypePerformanceClass = getPerformanceClass(pageTypeDiff);
       
       benchmarkHtml += `
-        <div class="benchmark-section">
+        <div class="benchmark-section ${pageTypePerformanceClass}">
           <h4>${pageType.replace('-', ' ').toUpperCase()} Page Benchmark</h4>
-          <p style="color: ${pageTypeColor}">
-            Expected Engagement: ${(pageTypeData.engagementRate * 100).toFixed(1)}%
-            (You: ${(engagement * 100).toFixed(1)}% - 
-            ${getPerformanceText(pageTypeDiff)})
-          </p>
-          <p>Typical Play Rate: ${(pageTypeData.playRate * 100).toFixed(1)}%</p>
-          <p>Average Video Length: ${pageTypeData.avgLength} minutes</p>
+          <div class="metric-label">Expected Engagement:</div>
+          <div class="metric-value">
+
+            ${(engagement * 100).toFixed(1)}% - 
+            ${getPerformanceText(pageTypeDiff)}<br>
+            (Benchmark: ${(pageTypeData.engagementRate * 100).toFixed(1)}%)
+          </div>
+          <div class="metric-label">Typical Play Rate:</div>
+          <div class="metric-value">
+            ${(pageTypeData.playRate * 100).toFixed(1)}%
+          </div>
+          <div class="metric-label">Average Video Length:</div>
+          <div class="metric-value">
+            ${pageTypeData.avgLength} minutes
+          </div>
         </div>
       `;
     }
@@ -251,6 +264,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (difference >= 0) return 'At or Above Benchmark';
     if (difference >= -0.1) return 'Slightly Below Benchmark';
     return 'Significantly Below Benchmark';
+  }
+
+  function getPerformanceClass(difference) {
+    if (difference >= 0) return 'performance-good';
+    if (difference >= -0.1) return 'performance-warning';
+    return 'performance-poor';
   }
 
   function formatDuration(seconds) {
