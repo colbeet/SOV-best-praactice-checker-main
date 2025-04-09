@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const videoDetailsDiv = document.getElementById('videoDetails');
   const engagementMetricsDiv = document.getElementById('engagementMetrics');
   const benchmarkComparisonDiv = document.getElementById('benchmarkComparison');
+  const videoTypeSelect = document.getElementById('videoType');
+  const pageTypeSelect = document.getElementById('pageType');
 
   // Benchmark data from State of Video 2023
   const BENCHMARKS = {
@@ -104,19 +106,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
 
-  // Load saved values and check current tab
-  chrome.storage.sync.get(['wistiaApiKey', 'wistiaMediaId', 'videoType', 'pageType'], function(result) {
-    if (result.wistiaApiKey) {
-      apiKeyInput.value = result.wistiaApiKey;
-    }
-    if (result.wistiaMediaId) {
-      mediaIdInput.value = result.wistiaMediaId;
-    }
-    if (result.videoType) {
-      document.getElementById('videoType').value = result.videoType;
-    }
-    if (result.pageType) {
-      document.getElementById('pageType').value = result.pageType;
+  // Load saved values
+  chrome.storage.local.get(['apiKey'], (result) => {
+    if (result.apiKey) {
+      apiKeyInput.value = result.apiKey;
     }
     
     // Check current tab for Wistia URL
@@ -124,71 +117,74 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // Function to extract media ID from Wistia URL
-  function extractMediaId(url) {
-    const mediaPattern = /(?:wistia\.com\/medias|wistia\.net\/embed)\/([a-zA-Z0-9]+)/;
-    const match = url.match(mediaPattern);
-    return match ? match[1] : null;
+  function extractMediaIdFromUrl(url) {
+    const patterns = [
+      /wistia\.com\/embed\/iframe\/([a-zA-Z0-9]+)/,
+      /wistia\.com\/embed\/medias\/([a-zA-Z0-9]+)/,
+      /wistia\.com\/medias\/([a-zA-Z0-9]+)/
+    ];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) {
+        return match[1];
+      }
+    }
+    return null;
   }
 
   // Function to check current tab for Wistia URL
   function checkCurrentTab() {
-    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-      if (tabs[0] && tabs[0].url) {
-        const mediaId = extractMediaId(tabs[0].url);
-        if (mediaId) {
-          mediaIdInput.value = mediaId;
-          chrome.storage.sync.set({ wistiaMediaId: mediaId });
-        }
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      const currentUrl = tabs[0].url;
+      const mediaId = extractMediaIdFromUrl(currentUrl);
+      if (mediaId) {
+        mediaIdInput.value = mediaId;
       }
     });
   }
 
-  // Listen for tab updates
-  chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
-    if (changeInfo.url) {
-      const mediaId = extractMediaId(changeInfo.url);
-      if (mediaId) {
-        mediaIdInput.value = mediaId;
-        chrome.storage.sync.set({ wistiaMediaId: mediaId });
-      }
-    }
-  });
-
   // Event listeners for input fields
   apiKeyInput.addEventListener('input', function() {
-    chrome.storage.sync.set({ wistiaApiKey: apiKeyInput.value });
+    chrome.storage.local.set({ apiKey: apiKeyInput.value });
   });
 
-  mediaIdInput.addEventListener('input', function() {
-    chrome.storage.sync.set({ wistiaMediaId: mediaIdInput.value });
+  // Remove storage for video type selection
+  videoTypeSelect.addEventListener('change', function() {
+    // No storage needed - just update the UI
   });
 
-  // Add event listeners for video and page type selections
-  document.getElementById('videoType').addEventListener('change', function() {
-    chrome.storage.sync.set({ videoType: this.value });
+  // Remove storage for page type selection
+  pageTypeSelect.addEventListener('change', function() {
+    // No storage needed - just update the UI
   });
 
-  document.getElementById('pageType').addEventListener('change', function() {
-    chrome.storage.sync.set({ pageType: this.value });
-  });
+  // Function to show auto-detected notification
+  function showAutoDetectedNotification(message) {
+    const notification = document.createElement('div');
+    notification.className = 'auto-detected-notification';
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 3000);
+  }
 
-  analyzeBtn.addEventListener('click', async function() {
+  // Add event listener for analyze button
+  document.getElementById('analyzeBtn').addEventListener('click', async function() {
     const apiKey = apiKeyInput.value.trim();
     const mediaId = mediaIdInput.value.trim();
 
     if (!apiKey || !mediaId) {
-      showError('Please enter both API key and Media ID');
+      alert('Please enter both API Key and Media ID');
       return;
     }
 
     try {
       showLoading();
-      const videoData = await fetchVideoData(mediaId, apiKey);
       const stats = await fetchVideoStats(mediaId, apiKey);
-      
-      displayResults(videoData, stats);
+      displayResults(stats);
     } catch (error) {
-      showError(error.message);
+      console.error('Error:', error);
+      showError(`Failed to fetch video stats: ${error.message}`);
     }
   });
 
@@ -207,120 +203,49 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   async function fetchVideoStats(mediaId, apiKey) {
-    const response = await fetch(`https://api.wistia.com/v1/stats/medias/${mediaId}.json`, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`
-      }
-    });
+    console.log('Fetching video stats with API key:', apiKey.substring(0, 5) + '...');
+    
+    try {
+      // Fetch both media stats and events data
+      const [mediaStats, eventsData] = await Promise.all([
+        fetch(`https://api.wistia.com/v1/stats/medias/${mediaId}.json`, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        }).then(async res => {
+          if (!res.ok) {
+            const errorText = await res.text();
+            console.error('Media stats API error:', res.status, errorText);
+            throw new Error(`Media stats API error: ${res.status} ${errorText}`);
+          }
+          return res.json();
+        }),
+        fetch(`https://api.wistia.com/v1/stats/events.json?media_id=${mediaId}`, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        }).then(async res => {
+          if (!res.ok) {
+            const errorText = await res.text();
+            console.error('Events API error:', res.status, errorText);
+            throw new Error(`Events API error: ${res.status} ${errorText}`);
+          }
+          return res.json();
+        })
+      ]);
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch video stats');
-    }
-
-    const stats = await response.json();
-    
-    // Debug: Log the stats object to see if embed_url exists
-    console.log('Wistia Stats Response:', stats);
-    
-    // Try to find embed_url in different possible locations
-    let embedUrl = null;
-    
-    // Check direct property
-    if (stats.embed_url) {
-      embedUrl = stats.embed_url;
-      console.log('Embed URL found directly:', embedUrl);
-    } 
-    // Check in media object if it exists
-    else if (stats.media && stats.media.embed_url) {
-      embedUrl = stats.media.embed_url;
-      console.log('Embed URL found in media object:', embedUrl);
-    }
-    // Check in events array if it exists
-    else if (stats.events && stats.events.length > 0) {
-      for (const event of stats.events) {
-        if (event.embed_url) {
-          embedUrl = event.embed_url;
-          console.log('Embed URL found in events array:', embedUrl);
-          break;
-        }
-      }
-    }
-    
-    // If we found an embed URL, try to detect page type
-    if (embedUrl) {
-      const detectedPageType = detectPageTypeFromUrl(embedUrl);
-      console.log('Detected page type:', detectedPageType);
+      console.log('Media Stats Response:', JSON.stringify(mediaStats, null, 2));
+      console.log('Events Data Response:', JSON.stringify(eventsData, null, 2));
       
-      if (detectedPageType) {
-        // Set the detected page type in the dropdown
-        const pageTypeSelect = document.getElementById('pageType');
-        pageTypeSelect.value = detectedPageType;
-        
-        // Save the detected page type to storage
-        chrome.storage.sync.set({ pageType: detectedPageType });
-        
-        // Show a notification that page type was auto-detected
-        showAutoDetectedNotification('Page type auto-detected from URL');
-      }
-    } else {
-      console.log('No embed_url found in the stats response');
+      // Combine the data
+      return {
+        ...mediaStats,
+        events: eventsData
+      };
+    } catch (error) {
+      console.error('Error in fetchVideoStats:', error);
+      throw error;
     }
-    
-    return stats;
-  }
-
-  // Function to show auto-detected notification
-  function showAutoDetectedNotification(message) {
-    // Create notification element if it doesn't exist
-    let notification = document.getElementById('autoDetectedNotification');
-    if (!notification) {
-      notification = document.createElement('div');
-      notification.id = 'autoDetectedNotification';
-      notification.className = 'auto-detected-notification';
-      document.querySelector('.input-section').appendChild(notification);
-    }
-    
-    // Set message and show notification
-    notification.textContent = message;
-    notification.classList.remove('hidden');
-    
-    // Hide notification after 5 seconds
-    setTimeout(() => {
-      notification.classList.add('hidden');
-    }, 5000);
-  }
-
-  // Function to detect page type from URL
-  function detectPageTypeFromUrl(url) {
-    console.log('Attempting to detect page type from URL:', url);
-    
-    // Convert URL to lowercase for case-insensitive matching
-    const lowerUrl = url.toLowerCase();
-    
-    // Define keywords and their corresponding page types
-    const pageTypeKeywords = {
-      'course': 'Course',
-      'video gallery': 'Video gallery',
-      'contact': 'Contact',
-      'event': 'Event',
-      'home': 'Home',
-      'thank you': 'Thank you',
-      'landing': 'Landing',
-      'product': 'Product',
-      'blog': 'Blog',
-      'case study': 'Case study'
-    };
-    
-    // Check each keyword
-    for (const [keyword, pageType] of Object.entries(pageTypeKeywords)) {
-      if (lowerUrl.includes(keyword)) {
-        console.log(`Found keyword "${keyword}" in URL, detected page type: ${pageType}`);
-        return pageType;
-      }
-    }
-    
-    console.log('No matching keywords found in URL');
-    return null;
   }
 
   function getLengthCategory(duration) {
@@ -332,38 +257,53 @@ document.addEventListener('DOMContentLoaded', function() {
     return { category: '30-60', data: BENCHMARKS.lengthBenchmarks['30-60'] };
   }
 
-  function displayResults(videoData, stats) {
-    const duration = videoData.duration;
-    const lengthCategory = getLengthCategory(duration);
-    const engagement = stats.engagement || 0;
-    const playRate = (stats.play_rate) || 0;
-    const conversion = stats.actions?.[0]?.rate || 0;
-    
+  function displayResults(stats) {
     // Get selected video and page types
-    const videoType = document.getElementById('videoType').value;
-    const pageType = document.getElementById('pageType').value;
-
+    const videoType = videoTypeSelect.value;
+    const pageType = pageTypeSelect.value;
+    
+    console.log('Displaying results with page type:', pageType);
+    console.log('Current page type select value:', pageTypeSelect.value);
+    
+    // Extract metrics with fallbacks for missing data
+    const engagement = stats.engagement || 0;
+    const playRate = stats.play_rate || 0;
+    const conversion = stats.actions?.[0]?.rate || 0;
+    const playCount = stats.play_count || 0;
+    const visitors = stats.visitors || 0;
+    
+    // Get video details
+    const videoDetails = stats.media || {};
+    const title = videoDetails.name || 'Unknown Title';
+    const duration = videoDetails.duration || 0;
+    
+    // Format duration
+    const minutes = Math.floor(duration / 60);
+    const seconds = Math.floor(duration % 60);
+    const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
     // Display video details
     videoDetailsDiv.innerHTML = `
       <h3>Video Details</h3>
-      <p>Title: ${videoData.name}</p>
-      <p>Duration: ${formatDuration(duration)}</p>
-      <p>Length Category: ${lengthCategory.category} minutes</p>
+      <p><strong>Title:</strong> ${title}</p>
+      <p><strong>Duration:</strong> ${formattedDuration}</p>
     `;
-
+    
     // Display engagement metrics
     engagementMetricsDiv.innerHTML = `
       <h3>Performance Metrics</h3>
-      <p>Engagement Rate: ${(engagement * 100).toFixed(1)}%</p>
-      <p>Play Rate: ${(playRate * 100).toFixed(1)}%</p>
-      <p>Total Views: ${stats.play_count}</p>
-      <p>Unique Visitors: ${stats.visitors}</p>
+      <p><strong>Engagement Rate:</strong> ${(engagement * 100).toFixed(1)}%</p>
+      <p><strong>Play Rate:</strong> ${(playRate * 100).toFixed(1)}%</p>
+      <p><strong>Conversion Rate:</strong> ${(conversion * 100).toFixed(1)}%</p>
+      <p><strong>Total Views:</strong> ${playCount}</p>
+      <p><strong>Unique Visitors:</strong> ${visitors}</p>
     `;
-
+    
     // Display benchmark comparisons
     let benchmarkHtml = '<h3>Benchmark Comparisons</h3>';
-
+    
     // Add length-based metrics
+    const lengthCategory = getLengthCategory(duration);
     const lengthConversion = lengthCategory.data.conversion;
     const lengthEngagement = lengthCategory.data.engagement;
     const lengthDiff = engagement - lengthEngagement;
@@ -388,7 +328,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
       </div>
     `;
-
+    
     // Add video type specific benchmark if selected
     if (videoType) {
       const videoTypeData = BENCHMARKS.videoTypes[videoType];
@@ -397,7 +337,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const videoTypeDiff = engagement - videoTypeEngagement;
       const videoTypeColor = getPerformanceColor(videoTypeDiff);
       const videoTypePerformanceClass = getPerformanceClass(videoTypeDiff);
-
+      
       // Video Type Benchmark card
       benchmarkHtml += `
         <div class="benchmark-section ${videoTypePerformanceClass}">
@@ -417,40 +357,60 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
       `;
     }
-
+    
     // Add page type specific benchmark if selected
     if (pageType) {
-      const pageTypeData = BENCHMARKS.pageTypes[pageType];
-      const pageTypeDiff = engagement - pageTypeData.engagementRate;
-      const pageTypeColor = getPerformanceColor(pageTypeDiff);
-      const pageTypePerformanceClass = getPerformanceClass(pageTypeDiff);
+      console.log('Adding page type benchmark for:', pageType);
       
-
-      // Page Type Benchmark card
-      benchmarkHtml += `
-        <div class="benchmark-section ${pageTypePerformanceClass}">
-          <h4>${pageType.replace('-', ' ').toUpperCase()} Page Benchmark</h4>
-          <div class="metric-label">Expected Engagement:</div>
-          <div class="metric-value">
-            ${(engagement * 100).toFixed(1)}% - 
-            ${getPerformanceText(pageTypeDiff)}<br>
-            (Benchmark: ${(pageTypeData.engagementRate * 100).toFixed(1)}%)
+      // Check if the page type exists in our benchmarks
+      if (BENCHMARKS.pageTypes[pageType]) {
+        const pageTypeData = BENCHMARKS.pageTypes[pageType];
+        const pageTypeDiff = engagement - pageTypeData.engagementRate;
+        const pageTypeColor = getPerformanceColor(pageTypeDiff);
+        const pageTypePerformanceClass = getPerformanceClass(pageTypeDiff);
+        
+        // Page Type Benchmark card
+        benchmarkHtml += `
+          <div class="benchmark-section ${pageTypePerformanceClass}">
+            <h4>${pageType.replace('-', ' ').toUpperCase()} Page Benchmark</h4>
+            <div class="metric-label">Expected Engagement:</div>
+            <div class="metric-value">
+              ${(engagement * 100).toFixed(1)}% - 
+              ${getPerformanceText(pageTypeDiff)}<br>
+              (Benchmark: ${(pageTypeData.engagementRate * 100).toFixed(1)}%)
+            </div>
+            <div class="metric-label">Play Rate:</div>
+            <div class="metric-value">
+              ${(playRate * 100).toFixed(1)}% - 
+              ${getPerformanceText(playRate - pageTypeData.playRate)}<br>
+              (Benchmark: ${(pageTypeData.playRate * 100).toFixed(1)}%)
+            </div>
+            <div class="metric-label">Average Video Length:</div>
+            <div class="metric-value">
+              ${pageTypeData.avgLength} minutes
+            </div>
           </div>
-          <div class="metric-label">Play Rate:</div>
-          <div class="metric-value">
-            ${(playRate * 100).toFixed(1)}% - 
-            ${getPerformanceText(playRate - pageTypeData.playRate)}<br>
-            (Benchmark: ${(pageTypeData.playRate * 100).toFixed(1)}%)
+        `;
+      } else {
+        console.error('Page type not found in benchmarks:', pageType);
+        benchmarkHtml += `
+          <div class="benchmark-section">
+            <h4>Page Type Benchmark</h4>
+            <p>No benchmark data available for the selected page type: ${pageType}</p>
           </div>
-          <div class="metric-label">Average Video Length:</div>
-          <div class="metric-value">
-            ${pageTypeData.avgLength} minutes
-          </div>
-        </div>
-      `;
+        `;
+      }
+    } else {
+      console.log('No page type selected, skipping page type benchmark');
     }
-
+    
+    // Set the benchmark HTML and then show results
     benchmarkComparisonDiv.innerHTML = benchmarkHtml;
+    
+    // Force a reflow to ensure the benchmark card is rendered
+    benchmarkComparisonDiv.offsetHeight;
+    
+    // Now show the results
     showResults();
   }
 
@@ -495,6 +455,15 @@ document.addEventListener('DOMContentLoaded', function() {
     loadingDiv.classList.add('hidden');
     errorDiv.classList.add('hidden');
     resultsDiv.classList.remove('hidden');
+    
+    // Force a reflow to ensure all elements are properly displayed
+    resultsDiv.offsetHeight;
+    
+    // Log the visibility state of the benchmark comparison div
+    console.log('Benchmark comparison div visibility:', 
+      window.getComputedStyle(benchmarkComparisonDiv).display);
+    console.log('Results div visibility:', 
+      window.getComputedStyle(resultsDiv).display);
   }
 
   function getLengthKey(duration) {
