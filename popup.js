@@ -112,6 +112,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (result.wistiaMediaId) {
       mediaIdInput.value = result.wistiaMediaId;
     }
+    if (result.videoType) {
+      document.getElementById('videoType').value = result.videoType;
+    }
+    if (result.pageType) {
+      document.getElementById('pageType').value = result.pageType;
+    }
     
     // Check current tab for Wistia URL
     checkCurrentTab();
@@ -155,6 +161,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   mediaIdInput.addEventListener('input', function() {
     chrome.storage.sync.set({ wistiaMediaId: mediaIdInput.value });
+  });
+
+  // Add event listeners for video and page type selections
+  document.getElementById('videoType').addEventListener('change', function() {
+    chrome.storage.sync.set({ videoType: this.value });
+  });
+
+  document.getElementById('pageType').addEventListener('change', function() {
+    chrome.storage.sync.set({ pageType: this.value });
   });
 
   analyzeBtn.addEventListener('click', async function() {
@@ -202,7 +217,110 @@ document.addEventListener('DOMContentLoaded', function() {
       throw new Error('Failed to fetch video stats');
     }
 
-    return await response.json();
+    const stats = await response.json();
+    
+    // Debug: Log the stats object to see if embed_url exists
+    console.log('Wistia Stats Response:', stats);
+    
+    // Try to find embed_url in different possible locations
+    let embedUrl = null;
+    
+    // Check direct property
+    if (stats.embed_url) {
+      embedUrl = stats.embed_url;
+      console.log('Embed URL found directly:', embedUrl);
+    } 
+    // Check in media object if it exists
+    else if (stats.media && stats.media.embed_url) {
+      embedUrl = stats.media.embed_url;
+      console.log('Embed URL found in media object:', embedUrl);
+    }
+    // Check in events array if it exists
+    else if (stats.events && stats.events.length > 0) {
+      for (const event of stats.events) {
+        if (event.embed_url) {
+          embedUrl = event.embed_url;
+          console.log('Embed URL found in events array:', embedUrl);
+          break;
+        }
+      }
+    }
+    
+    // If we found an embed URL, try to detect page type
+    if (embedUrl) {
+      const detectedPageType = detectPageTypeFromUrl(embedUrl);
+      console.log('Detected page type:', detectedPageType);
+      
+      if (detectedPageType) {
+        // Set the detected page type in the dropdown
+        const pageTypeSelect = document.getElementById('pageType');
+        pageTypeSelect.value = detectedPageType;
+        
+        // Save the detected page type to storage
+        chrome.storage.sync.set({ pageType: detectedPageType });
+        
+        // Show a notification that page type was auto-detected
+        showAutoDetectedNotification('Page type auto-detected from URL');
+      }
+    } else {
+      console.log('No embed_url found in the stats response');
+    }
+    
+    return stats;
+  }
+
+  // Function to show auto-detected notification
+  function showAutoDetectedNotification(message) {
+    // Create notification element if it doesn't exist
+    let notification = document.getElementById('autoDetectedNotification');
+    if (!notification) {
+      notification = document.createElement('div');
+      notification.id = 'autoDetectedNotification';
+      notification.className = 'auto-detected-notification';
+      document.querySelector('.input-section').appendChild(notification);
+    }
+    
+    // Set message and show notification
+    notification.textContent = message;
+    notification.classList.remove('hidden');
+    
+    // Hide notification after 5 seconds
+    setTimeout(() => {
+      notification.classList.add('hidden');
+    }, 5000);
+  }
+
+  // Function to detect page type from URL
+  function detectPageTypeFromUrl(url) {
+    console.log('Attempting to detect page type from URL:', url);
+    
+    // Convert URL to lowercase for case-insensitive matching
+    const lowerUrl = url.toLowerCase();
+    
+    // Define keywords and their corresponding page types
+    const pageTypeKeywords = {
+      'course': 'Course',
+      'video gallery': 'Video gallery',
+      'contact': 'Contact',
+      'event': 'Event',
+      'home': 'Home',
+      'thank you': 'Thank you',
+      'landing': 'Landing',
+      'product': 'Product',
+      'blog': 'Blog',
+      'case study': 'Case study'
+    };
+    
+    // Check each keyword
+    for (const [keyword, pageType] of Object.entries(pageTypeKeywords)) {
+      if (lowerUrl.includes(keyword)) {
+        console.log(`Found keyword "${keyword}" in URL, detected page type: ${pageType}`);
+        return pageType;
+      }
+    }
+    
+    console.log('No matching keywords found in URL');
+    return null;
   }
 
   function getLengthCategory(duration) {
